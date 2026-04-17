@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import Pos from './pages/Pos';
 import Products from './pages/Products';
 import Stock from './pages/Stock';
+import History from './pages/History';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/pos" element={<Pos />} />
           <Route path="/produits" element={<Products />} />
           <Route path="/stock" element={<Stock />} />
+          <Route path="/historique" element={<History />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

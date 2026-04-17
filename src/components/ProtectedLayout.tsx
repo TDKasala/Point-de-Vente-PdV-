@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Archive, LogOut } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Archive, LogOut, History } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -25,6 +25,7 @@ export function ProtectedLayout() {
     { path: '/pos', icon: <ShoppingCart size={24} />, label: 'Caisse' },
     { path: '/produits', icon: <Package size={24} />, label: 'Produits' },
     { path: '/stock', icon: <Archive size={24} />, label: 'Stock' },
+    { path: '/historique', icon: <History size={24} />, label: 'Historique' },
   ];
 
   return (

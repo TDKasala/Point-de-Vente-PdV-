@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
 import { Product } from '../store/useStore';
-import { Plus, Minus, AlertCircle } from 'lucide-react';
+import { Plus, Minus, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function Stock() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -45,6 +46,11 @@ export default function Stock() {
       console.error("Erreur de mise à jour du stock", error);
       fetchProducts();
       alert("Erreur lors de la mise à jour du stock");
+    } else {
+      setSuccessMessage(`Stock de ${product.name} mis à jour : ${newStock}`);
+      setTimeout(() => {
+        setSuccessMessage(null);
+      }, 3000);
     }
   };
 
@@ -54,6 +60,13 @@ export default function Stock() {
         <h1 className="text-3xl font-bold text-brand-text mb-2">Gestion des stocks</h1>
         <p className="text-brand-text-muted">Ajustez rapidement l'inventaire en temps réel</p>
       </div>
+
+      {successMessage && (
+        <div className="mb-6 bg-brand-accent/20 border border-brand-accent text-brand-accent px-4 py-4 rounded-xl flex items-center shadow-sm animate-fade-in">
+          <CheckCircle2 size={24} className="mr-3 flex-shrink-0" />
+          <span className="font-medium text-lg">{successMessage}</span>
+        </div>
+      )}
 
       <div className="space-y-4">
         {loading ? (

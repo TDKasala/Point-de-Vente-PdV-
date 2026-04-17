@@ -1,8 +1,63 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Plus, Minus, Trash2, Camera, User, BadgeAlert, ShoppingCart } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, Camera, User, BadgeAlert, ShoppingCart, ScanLine, X } from 'lucide-react';
 import { usePosStore, Product } from '../store/useStore';
 import { useAuth } from '../hooks/useAuth';
+import { Html5Qrcode } from 'html5-qrcode';
+
+function BarcodeScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (code: string) => void }) {
+  useEffect(() => {
+    const html5QrCode = new Html5Qrcode("reader");
+    let isComponentMounted = true;
+
+    html5QrCode.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      (decodedText) => {
+        if (isComponentMounted) {
+           onScan(decodedText);
+        }
+      },
+      () => {
+        // Ignorer les erreurs frame par frame
+      }
+    ).catch(err => {
+      console.error(err);
+      if (isComponentMounted) {
+        alert("Erreur d'accès à la caméra. Vérifiez vos permissions.");
+        onClose();
+      }
+    });
+
+    return () => {
+      isComponentMounted = false;
+      if (html5QrCode) {
+        try {
+           html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
+        } catch (err) {
+           console.error("Erreur à l'arrêt du scanner", err);
+        }
+      }
+    };
+  }, [onClose, onScan]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-brand-surface rounded-2xl w-full max-w-md mx-auto overflow-hidden shadow-2xl relative border border-brand-border flex flex-col">
+        <div className="p-4 border-b border-brand-border flex justify-between items-center">
+          <h2 className="text-xl font-bold text-brand-text">Scanner un code-barres</h2>
+          <button onClick={onClose} className="text-brand-text-muted hover:text-white">
+             <X size={24} />
+          </button>
+        </div>
+        <div className="p-6">
+           <div id="reader" className="w-full bg-black rounded-xl overflow-hidden shadow-inner min-h-[250px]"></div>
+           <p className="text-center text-brand-text-muted text-sm mt-6">Placez le code-barres ou le QR code au centre du cadre.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Pos() {
   const { user } = useAuth();
@@ -13,6 +68,7 @@ export default function Pos() {
   const [paymentMethod, setPaymentMethod] = useState<'Espèces' | 'Mobile Money' | 'Carte'>('Espèces');
   const [processing, setProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const cart = usePosStore((state) => state.cart);
   const addToCart = usePosStore((state) => state.addToCart);
@@ -46,6 +102,23 @@ export default function Pos() {
     p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     (p.barcode && p.barcode.includes(searchQuery))
   );
+
+  const handleScanSuccess = (decodedText: string) => {
+    setIsScannerOpen(false);
+    const matchedProduct = products.find(p => p.barcode === decodedText);
+    
+    if (matchedProduct) {
+      if (matchedProduct.stock > 0) {
+        addToCart(matchedProduct);
+        setSuccessMessage(`Produit ajouté : ${matchedProduct.name}`);
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        alert(`Le produit "${matchedProduct.name}" est épuisé et ne peut pas être ajouté au panier.`);
+      }
+    } else {
+      alert(`Code-barres non reconnu : ${decodedText}`);
+    }
+  };
 
   const handleCheckout = async () => {
     if (!user || cart.length === 0) return;
@@ -128,11 +201,18 @@ export default function Pos() {
             </div>
             <input
               type="text"
-              className="block w-full pl-11 pr-4 py-3 border border-brand-border rounded-xl bg-brand-surface text-brand-text placeholder-brand-text-muted focus:outline-none focus:border-brand-accent text-base"
-              placeholder="Rechercher un produit ou scanner..."
+              className="block w-full pl-11 pr-14 py-3 border border-brand-border rounded-xl bg-brand-surface text-brand-text placeholder-brand-text-muted focus:outline-none focus:border-brand-accent text-base"
+              placeholder="Rechercher un produit..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
+            <button
+               onClick={() => setIsScannerOpen(true)}
+               className="absolute inset-y-0 right-0 pr-3 flex items-center text-brand-text-muted hover:text-brand-accent transition-colors"
+               title="Scanner un code-barres"
+            >
+               <ScanLine className="h-6 w-6" />
+            </button>
           </div>
           <div className="hidden ml-4 bg-brand-surface px-4 py-3 border border-brand-border rounded-xl text-brand-text-muted text-sm lg:flex items-center">
             <User className="h-4 w-4 mr-2" />
@@ -297,6 +377,14 @@ export default function Pos() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Scanner Modal */}
+      {isScannerOpen && (
+         <BarcodeScannerModal
+            onClose={() => setIsScannerOpen(false)}
+            onScan={handleScanSuccess}
+         />
       )}
     </div>
   );

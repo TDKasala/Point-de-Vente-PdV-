@@ -66,12 +66,21 @@ export default function Products() {
     e.preventDefault();
     if (!user) return;
 
+    let finalImageUrl = formData.image_url.trim();
+
+    if (!finalImageUrl && formData.name.trim()) {
+      // Génère une icône abstraite unique en fonction du nom du produit via DiceBear
+      // et l'intègre parfaitement avec notre thème "Elegant Dark" (Fond: #1F2937, Accent: #10B981 etc.)
+      const seedName = encodeURIComponent(formData.name.trim());
+      finalImageUrl = `https://api.dicebear.com/7.x/shapes/svg?seed=${seedName}&backgroundColor=1F2937&shape1Color=10b981&shape2Color=4b5563&shape3Color=9ca3af`;
+    }
+
     const productData = {
       name: formData.name,
       price: parseFloat(formData.price),
       stock: parseInt(formData.stock, 10),
       barcode: formData.barcode,
-      image_url: formData.image_url,
+      image_url: finalImageUrl,
       user_id: user.id
     };
 

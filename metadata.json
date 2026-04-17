@@ -1,6 +1,6 @@
 {
   "name": "POS Mobile (Point de Vente)",
   "description": "Application POS simple pour petits commerces",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": []
 }
