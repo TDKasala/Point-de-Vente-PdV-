@@ -1,13 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Trash2, X, Image as ImageIcon, FolderTree, Tag, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Image as ImageIcon, FolderTree, Tag, Check, History, ArrowRight, User as UserIcon } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { Product } from '../store/useStore';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface Category {
   id: string;
   name: string;
+  user_id: string;
+}
+
+interface ProductHistory {
+  id: string;
+  created_at: string;
+  change_type: 'price' | 'stock' | 'initial';
+  old_value: number | null;
+  new_value: number;
+  notes: string | null;
   user_id: string;
 }
 
@@ -18,8 +28,12 @@ export default function Products() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [historyProduct, setHistoryProduct] = useState<Product | null>(null);
+  const [productHistory, setProductHistory] = useState<ProductHistory[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [currency, setCurrency] = useState('R');
 
   const [categoryFormData, setCategoryFormData] = useState({ name: '' });
@@ -125,6 +139,15 @@ export default function Products() {
 
     try {
       if (editingCategory) {
+        // If renaming, we should also update existing products using this category name
+        if (editingCategory.name !== categoryFormData.name) {
+          await supabase
+            .from('products')
+            .update({ category: categoryFormData.name })
+            .eq('user_id', user.id)
+            .eq('category', editingCategory.name);
+        }
+
         const { error } = await supabase
           .from('product_categories')
           .update(catData)
@@ -142,25 +165,36 @@ export default function Products() {
       setCategoryFormData({ name: '' });
       setEditingCategory(null);
       fetchCategories();
+      fetchProducts(); // Refresh products in case names changed
       
       setTimeout(() => setCategorySuccess(''), 3000);
     } catch (error: any) {
-      alert("Erreur lors de l'enregistrement de la catégorie. Assurez-vous que la table 'product_categories' existe avec les colonnes (id, name, user_id).");
+      alert("Erreur lors de l'enregistrement de la catégorie.");
       console.error(error);
     }
   };
 
   const handleCategoryDelete = async (id: string, name: string) => {
-    if (window.confirm(`Supprimer la catégorie "${name}" ? Les produits associés ne seront pas supprimés mais perdront leur catégorie.`)) {
-      const { error } = await supabase
-        .from('product_categories')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        alert(error.message);
-      } else {
+    if (window.confirm(`Supprimer la catégorie "${name}" ? Les produits associés seront réinitialisés en catégorie "Général".`)) {
+      try {
+        // Reset products to 'Général'
+        await supabase
+          .from('products')
+          .update({ category: 'Général' })
+          .eq('user_id', user.id)
+          .eq('category', name);
+
+        const { error } = await supabase
+          .from('product_categories')
+          .delete()
+          .eq('id', id);
+        
+        if (error) throw error;
+        
         fetchCategories();
+        fetchProducts();
+      } catch (error: any) {
+        alert(error.message);
       }
     }
   };
@@ -211,39 +245,102 @@ export default function Products() {
     }
   };
 
+  const fetchProductHistory = async (product: Product) => {
+    if (!user) return;
+    setLoadingHistory(true);
+    setHistoryProduct(product);
+    setHistoryModalOpen(true);
+    
+    try {
+      const { data, error } = await supabase
+        .from('product_history')
+        .select('*')
+        .eq('product_id', product.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setProductHistory(data || []);
+    } catch (err) {
+      console.error('History fetch error:', err);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const logProductHistory = async (productId: string, type: 'price' | 'stock' | 'initial', oldValue: number | null, newValue: number, notes?: string) => {
+    if (!user) return;
+    const { error } = await supabase.from('product_history').insert([{
+      product_id: productId,
+      user_id: user.id,
+      change_type: type,
+      old_value: oldValue,
+      new_value: newValue,
+      notes: notes || null
+    }]);
+    if (error) console.error('History logging error:', error);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     let finalImageUrl = formData.image_url.trim();
 
+    const price = parseFloat(formData.price);
+    const stock = parseInt(formData.stock, 10);
+
     const productData = {
       name: formData.name,
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock, 10),
+      price: price,
+      stock: stock,
       barcode: formData.barcode || null,
       image_url: finalImageUrl || null,
       category: formData.category || 'Général',
       user_id: user.id
     };
 
-    if (editingProduct) {
-      const { error } = await supabase
-        .from('products')
-        .update(productData)
-        .eq('id', editingProduct.id);
-      
-      if (error) alert(error.message);
-    } else {
-      const { error } = await supabase
-        .from('products')
-        .insert([productData]);
-        
-      if (error) alert(error.message);
-    }
+    try {
+      if (editingProduct) {
+        // Track changes
+        const priceChanged = editingProduct.price !== price;
+        const stockChanged = editingProduct.stock !== stock;
 
-    closeModal();
-    fetchProducts();
+        const { error } = await supabase
+          .from('products')
+          .update(productData)
+          .eq('id', editingProduct.id);
+        
+        if (error) throw error;
+
+        if (priceChanged) {
+          await logProductHistory(editingProduct.id, 'price', editingProduct.price, price, 'Mise à jour manuelle');
+        }
+        if (stockChanged) {
+          await logProductHistory(editingProduct.id, 'stock', editingProduct.stock, stock, 'Mise à jour manuelle');
+        }
+      } else {
+        const { data, error } = await supabase
+          .from('products')
+          .insert([productData])
+          .select()
+          .single();
+          
+        if (error) throw error;
+
+        // Log initial creation
+        if (data) {
+          await logProductHistory(data.id, 'initial', null, stock, 'Création du produit');
+          if (price > 0) {
+            await logProductHistory(data.id, 'price', null, price, 'Prix initial');
+          }
+        }
+      }
+
+      closeModal();
+      fetchProducts();
+    } catch (err: any) {
+      alert(err.message);
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -339,6 +436,13 @@ export default function Products() {
                       </span>
                     </td>
                     <td className="px-2 sm:px-6 mt-4 sm:mt-0 py-2 sm:py-5 whitespace-nowrap text-right text-sm font-medium flex justify-end space-x-2 border-t sm:border-0 border-brand-border pt-4 sm:pt-4">
+                      <button 
+                        onClick={() => fetchProductHistory(product)} 
+                        className="text-brand-text-muted hover:text-brand-accent bg-brand-surface-light p-2 rounded-lg transition-colors"
+                        title="Historique des changements"
+                      >
+                        <History size={20} />
+                      </button>
                       <button onClick={() => openModal(product)} className="text-brand-text-muted hover:text-white bg-brand-surface-light p-2 rounded-lg transition-colors">
                         <Edit2 size={20} />
                       </button>
@@ -622,6 +726,116 @@ export default function Products() {
                <p className="text-[10px] text-brand-text-muted italic text-center">
                   Les catégories vous aident à organiser vos produits sur le terminal de vente.
                </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {historyModalOpen && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-brand-surface rounded-2xl border border-brand-border w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex justify-between items-center p-6 border-b border-brand-border shrink-0">
+              <div className="flex items-center">
+                <div className="bg-brand-accent/10 p-2 rounded-lg mr-3">
+                  <History className="text-brand-accent" size={24} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-brand-text">Historique de l'article</h2>
+                  <p className="text-xs text-brand-text-muted">{historyProduct?.name}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setHistoryModalOpen(false)} 
+                className="text-brand-text-muted hover:text-white transition-colors p-2 bg-brand-surface-light rounded-xl"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-brand-bg/20">
+              {loadingHistory ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                   <div className="w-10 h-10 border-4 border-brand-accent border-t-transparent rounded-full animate-spin mb-4"></div>
+                   <p className="text-brand-text-muted">Chargement de l'historique...</p>
+                </div>
+              ) : productHistory.length === 0 ? (
+                <div className="text-center py-12 px-6">
+                   <div className="bg-brand-surface-light w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-brand-border">
+                      <History size={32} className="text-brand-text-muted opacity-30" />
+                   </div>
+                   <h3 className="text-lg font-bold text-brand-text mb-1">Aucun historique disponible</h3>
+                   <p className="text-brand-text-muted text-sm">Les changements de prix et de stock seront enregistrés ici à l'avenir.</p>
+                </div>
+              ) : (
+                <div className="relative">
+                  <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-brand-border -z-10" />
+                  <div className="space-y-6">
+                    {productHistory.map((item) => (
+                      <div key={item.id} className="relative pl-12">
+                        <div className={`absolute left-[13px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-brand-surface ${
+                          item.change_type === 'price' ? 'bg-brand-accent' : 
+                          item.change_type === 'initial' ? 'bg-purple-500' : 'bg-blue-500'
+                        }`} />
+                        
+                        <div className="bg-brand-surface border border-brand-border rounded-xl p-4 shadow-sm">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-2">
+                             <div className="flex items-center space-x-2">
+                               <span className={`px-2 py-0.5 text-[10px] uppercase font-bold rounded-md ${
+                                 item.change_type === 'price' ? 'bg-brand-accent/10 text-brand-accent' : 
+                                 item.change_type === 'initial' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'
+                               }`}>
+                                 {item.change_type === 'price' ? 'Prix' : item.change_type === 'stock' ? 'Stock' : 'Création'}
+                               </span>
+                               <span className="text-xs text-brand-text-muted">
+                                 {new Date(item.created_at).toLocaleString('fr-FR', {
+                                   day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                                 })}
+                               </span>
+                             </div>
+                             <div className="flex items-center text-[10px] text-brand-text-muted bg-brand-bg px-2 py-1 rounded-lg border border-brand-border">
+                               <UserIcon size={12} className="mr-1.5 opacity-50" />
+                               {item.user_id.substring(0, 8)}
+                             </div>
+                          </div>
+
+                          <div className="flex items-center space-x-4">
+                            {item.old_value !== null ? (
+                              <div className="flex items-center space-x-3">
+                                <span className="text-sm line-through text-brand-text-muted decoration-red-400/50">
+                                  {item.change_type === 'price' ? `${item.old_value.toFixed(2)} ${currency}` : item.old_value}
+                                </span>
+                                <ArrowRight size={14} className="text-brand-text-muted" />
+                                <span className="text-lg font-bold text-brand-text">
+                                  {item.change_type === 'price' ? `${item.new_value.toFixed(2)} ${currency}` : item.new_value}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-lg font-bold text-brand-text">
+                                {item.change_type === 'price' ? `${item.new_value.toFixed(2)} ${currency}` : item.new_value}
+                              </span>
+                            )}
+                          </div>
+
+                          {item.notes && (
+                            <p className="mt-3 text-[11px] text-brand-text-muted italic bg-brand-bg/50 p-2 rounded-lg">
+                              Note : {item.notes}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-6 border-t border-brand-border bg-brand-bg shrink-0">
+               <button 
+                 onClick={() => setHistoryModalOpen(false)}
+                 className="w-full bg-brand-surface border border-brand-border text-brand-text py-3 rounded-xl font-bold hover:bg-brand-surface-light transition-colors"
+               >
+                 Fermer
+               </button>
             </div>
           </div>
         </div>
