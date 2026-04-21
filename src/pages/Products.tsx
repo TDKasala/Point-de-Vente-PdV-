@@ -20,6 +20,7 @@ export default function Products() {
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [currency, setCurrency] = useState('R');
 
   const [categoryFormData, setCategoryFormData] = useState({ name: '' });
   const [categorySuccess, setCategorySuccess] = useState('');
@@ -35,7 +36,14 @@ export default function Products() {
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchSettings();
   }, [user]);
+
+  const fetchSettings = async () => {
+    if (!user) return;
+    const { data } = await supabase.from('user_settings').select('currency_symbol').eq('user_id', user.id).single();
+    if (data?.currency_symbol) setCurrency(data.currency_symbol);
+  };
 
   const fetchProducts = async () => {
     if (!user) return;
@@ -320,7 +328,7 @@ export default function Products() {
                     </td>
                     <td className="px-2 sm:px-6 py-1 sm:py-5 whitespace-nowrap">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Prix:</span>
-                      <span className="text-base font-bold text-brand-accent">{product.price.toFixed(2)} R</span>
+                      <span className="text-base font-bold text-brand-accent">{product.price.toFixed(2)} {currency}</span>
                     </td>
                     <td className="px-2 sm:px-6 py-1 sm:py-5 whitespace-nowrap">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Stock:</span>
@@ -369,7 +377,7 @@ export default function Products() {
                 </div>
                 <div className="grid grid-cols-2 gap-5">
                   <div>
-                    <label className="block text-sm font-semibold text-brand-text-muted mb-2">Prix (R)</label>
+                    <label className="block text-sm font-semibold text-brand-text-muted mb-2">Prix ({currency})</label>
                     <input
                       type="number"
                       step="0.01"

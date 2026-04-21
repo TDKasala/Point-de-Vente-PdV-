@@ -28,10 +28,18 @@ export default function History() {
   const [loading, setLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isRefunding, setIsRefunding] = useState(false);
+  const [currency, setCurrency] = useState('R');
 
   useEffect(() => {
     fetchSales();
+    fetchSettings();
   }, [user]);
+
+  const fetchSettings = async () => {
+    if (!user) return;
+    const { data } = await supabase.from('user_settings').select('currency_symbol').eq('user_id', user.id).single();
+    if (data?.currency_symbol) setCurrency(data.currency_symbol);
+  };
 
   const fetchSales = async () => {
     if (!user) return;
@@ -138,10 +146,10 @@ export default function History() {
      if (sale.sale_items) {
         sale.sale_items.forEach(i => {
            let pName = i.products?.name || 'Produit Inconnu';
-           text += `${i.quantity}x ${pName} - ${(i.price * i.quantity).toFixed(2)} R\n`;
+           text += `${i.quantity}x ${pName} - ${(i.price * i.quantity).toFixed(2)} ${currency}\n`;
         });
      }
-     text += `\n*Total: ${sale.total.toFixed(2)} R*\nMéthode: ${sale.payment_method}\n\nMerci pour votre visite !`;
+     text += `\n*Total: ${sale.total.toFixed(2)} ${currency}*\nMéthode: ${sale.payment_method}\n\nMerci pour votre visite !`;
      
      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
      window.open(url, '_blank');
@@ -161,7 +169,7 @@ export default function History() {
             <div>
               <h2 className="text-sm font-bold text-brand-text-muted uppercase tracking-widest mb-1">Évolution des ventes (7j)</h2>
               <div className="flex items-baseline space-x-2">
-                <span className="text-2xl font-black text-brand-accent">{totalLast7Days.toFixed(2)} R</span>
+                <span className="text-2xl font-black text-brand-accent">{totalLast7Days.toFixed(2)} {currency}</span>
                 <span className="text-xs text-brand-text-muted font-medium">total sur la période</span>
               </div>
             </div>
@@ -199,7 +207,7 @@ export default function History() {
                     boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
                     fontSize: '12px'
                   }}
-                  formatter={(value: number) => [`${value.toFixed(2)} R`, 'Ventes']}
+                  formatter={(value: number) => [`${value.toFixed(2)} ${currency}`, 'Ventes']}
                 />
                 <Area 
                   type="monotone" 
@@ -266,7 +274,7 @@ export default function History() {
                     </td>
                     <td className="px-2 sm:px-6 mt-3 sm:mt-0 py-2 sm:py-5 whitespace-nowrap text-right border-t sm:border-0 border-brand-border pt-4 sm:pt-5">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Montant total:</span>
-                      <span className={`text-base font-bold ${sale.status === 'refunded' ? 'text-brand-text-muted line-through' : 'text-brand-accent'}`}>{sale.total.toFixed(2)} R</span>
+                      <span className={`text-base font-bold ${sale.status === 'refunded' ? 'text-brand-text-muted line-through' : 'text-brand-accent'}`}>{sale.total.toFixed(2)} {currency}</span>
                     </td>
                   </tr>
                 ))}
@@ -310,7 +318,7 @@ export default function History() {
                          {item.quantity}x {item.products?.name || 'Produit inconnu'}
                        </span>
                        <span className="text-brand-text-muted text-right">
-                         {(item.price * item.quantity).toFixed(2)} R
+                         {(item.price * item.quantity).toFixed(2)} {currency}
                        </span>
                      </div>
                    ))}
@@ -323,7 +331,7 @@ export default function History() {
                <div className="border-t border-brand-border pt-4">
                  <div className="flex justify-between items-center font-bold text-lg mb-2">
                    <span>Total</span>
-                   <span className={selectedSale.status === 'refunded' ? 'line-through text-brand-text-muted' : 'text-brand-accent'}>{selectedSale.total.toFixed(2)} R</span>
+                   <span className={selectedSale.status === 'refunded' ? 'line-through text-brand-text-muted' : 'text-brand-accent'}>{selectedSale.total.toFixed(2)} {currency}</span>
                  </div>
                  <div className="flex justify-between items-center text-brand-text-muted">
                    <span>Moyen de paiement</span>
