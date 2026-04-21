@@ -34,7 +34,11 @@ export default function Login() {
       });
 
       if (error) {
-        setError(error.message);
+        let msg = error.message;
+        if (msg.includes('User already registered')) {
+          msg = "Cet utilisateur est déjà inscrit. Essayez de vous connecter.";
+        }
+        setError(msg);
       } else {
         setMessage("Compte créé avec succès ! Si vous n'êtes pas redirigé, veuillez vous connecter ou vérifier votre email (si imposé par Supabase).");
         // Basculer automatique sur le login après création réussie pour faciliter
@@ -51,7 +55,13 @@ export default function Login() {
       });
 
       if (error) {
-        setError(error.message);
+        let msg = error.message;
+        if (msg.includes('Invalid login credentials')) {
+          msg = "Identifiants invalides. Vérifiez votre email et mot de passe.";
+        } else if (msg.includes('Email not confirmed')) {
+          msg = "Email non confirmé. Veuillez vérifier votre boîte de réception.";
+        }
+        setError(msg);
       }
     }
     setLoading(false);
@@ -67,7 +77,7 @@ export default function Login() {
           {isSignUp ? 'Créer un compte' : 'Connectez-vous'}
         </h2>
         <p className="mt-2 text-center text-sm text-brand-text-muted">
-          Application POS Mobile
+          Application PdV Mobile
         </p>
       </div>
 

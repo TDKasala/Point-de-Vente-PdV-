@@ -14,8 +14,8 @@ export default defineConfig(({mode}) => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png'],
         manifest: {
-          name: 'POS Mobile - Caisse & Stock',
-          short_name: 'POS Mobile',
+          name: 'PdV Mobile - Caisse & Stock',
+          short_name: 'PdV Mobile',
           description: 'Application de point de vente et gestion de stock pour petits commerces.',
           theme_color: '#111827',
           background_color: '#111827',

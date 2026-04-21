@@ -1,6 +1,6 @@
 {
-  "name": "POS Mobile (Point de Vente)",
-  "description": "Application POS simple pour petits commerces",
+  "name": "PdV Mobile (Point de Vente)",
+  "description": "Application PdV simple pour petits commerces",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": []
 }

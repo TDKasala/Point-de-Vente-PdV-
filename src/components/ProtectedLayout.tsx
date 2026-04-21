@@ -99,7 +99,7 @@ export function ProtectedLayout() {
       {/* Sidebar for Desktop, Bottom Nav for Mobile */}
       <nav className="fixed bottom-0 w-full bg-brand-surface border-t border-brand-border md:relative md:w-64 md:border-t-0 md:border-r md:flex md:flex-col z-50">
         <div className="hidden md:flex p-6 items-center justify-center border-b border-brand-border">
-          <h1 className="text-2xl font-bold text-brand-text">POS Mobile</h1>
+          <h1 className="text-2xl font-bold text-brand-text">PdV Mobile</h1>
         </div>
         <div className="flex w-full md:flex-col md:flex-1 md:py-6 md:px-2 gap-2 overflow-x-auto">
           {navItems.map((item) => {

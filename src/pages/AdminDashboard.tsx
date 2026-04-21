@@ -63,7 +63,7 @@ export default function AdminDashboard() {
           <h1 className="text-3xl font-bold inline-flex items-center text-brand-text mb-2">
             Superadmin <ShieldAlert className="ml-3 text-brand-accent" size={28} />
           </h1>
-          <p className="text-brand-text-muted">Vue d'ensemble mondiale de la plateforme POS.</p>
+          <p className="text-brand-text-muted">Vue d'ensemble mondiale de la plateforme PdV.</p>
         </div>
         <div className="hidden md:block px-4 py-2 bg-brand-surface border border-brand-border rounded-xl">
           <span className="text-xs text-brand-text-muted block">Connecté en tant que</span>

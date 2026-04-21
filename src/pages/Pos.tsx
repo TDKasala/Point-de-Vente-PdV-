@@ -99,8 +99,17 @@ export default function Pos() {
   const cartTotal = usePosStore((state) => state.cartTotal);
 
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [offlineSalesCount, setOfflineSalesCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncError, setSyncError] = useState('');
+
+  const updateQueueCount = () => {
+     const queue = JSON.parse(localStorage.getItem('offline_sales_queue') || '[]');
+     setOfflineSalesCount(queue.length);
+  };
 
   useEffect(() => {
+    updateQueueCount();
     const handleOnline = () => { setIsOnline(true); syncOfflineSales(); };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener('online', handleOnline);
@@ -116,10 +125,15 @@ export default function Pos() {
   }, [user, isOnline]);
 
   const syncOfflineSales = async () => {
+     if (isSyncing) return;
      const queue = JSON.parse(localStorage.getItem('offline_sales_queue') || '[]');
      if (queue.length === 0 || !user) return;
      
-     const failedQueue = [];
+     setIsSyncing(true);
+     setSyncError('');
+     
+     let remainingQueue = [...queue];
+     let successCount = 0;
 
      for (const sale of queue) {
         try {
@@ -148,18 +162,24 @@ export default function Pos() {
                 await supabase.from('products').update({ stock: p.stock - item.quantity }).eq('id', item.product_id);
              }
           }
+          
+          remainingQueue = remainingQueue.filter(s => s.id !== sale.id);
+          successCount++;
+          localStorage.setItem('offline_sales_queue', JSON.stringify(remainingQueue));
+          setOfflineSalesCount(remainingQueue.length);
+          
         } catch (e) {
            console.error("Failed to sync offline sale", e);
-           failedQueue.push(sale);
+           setSyncError("Certaines ventes n'ont pas pu être synchronisées. Elles restent en attente.");
         }
      }
      
-     localStorage.setItem('offline_sales_queue', JSON.stringify(failedQueue));
-     if (failedQueue.length === 0) {
-        setSuccessMessage("Toutes les ventes hors-ligne ont été synchronisées !");
-        setTimeout(() => setSuccessMessage(''), 3000);
-        fetchProducts();
+     if (successCount > 0 && remainingQueue.length === 0) {
+        setSuccessMessage(`${successCount} vente(s) hors-ligne synchronisée(s) avec succès !`);
+        setTimeout(() => setSuccessMessage(''), 4000);
      }
+     fetchProducts();
+     setIsSyncing(false);
   }
 
   const fetchProducts = async () => {
@@ -247,6 +267,7 @@ export default function Pos() {
          const existingQueue = JSON.parse(localStorage.getItem('offline_sales_queue') || '[]');
          existingQueue.push(offlineSale);
          localStorage.setItem('offline_sales_queue', JSON.stringify(existingQueue));
+         setOfflineSalesCount(existingQueue.length);
 
          // Update local stock cache roughly
          const cachedProducts = JSON.parse(localStorage.getItem('pos_products_cache') || '[]');
@@ -349,16 +370,34 @@ export default function Pos() {
             <span className="block sm:inline">{successMessage}</span>
           </div>
         )}
+        {syncError && (
+          <div className="bg-red-500/20 border border-red-500 text-red-500 px-4 py-3 rounded-xl relative mb-6">
+            <span className="block sm:inline">{syncError}</span>
+          </div>
+        )}
         
         <header className="flex justify-between items-center mb-6">
           <div className="flex items-center space-x-4">
              <h1 className="text-2xl font-bold hidden lg:block text-brand-text">Vente</h1>
-             {!isOnline && (
+             {!isOnline ? (
                 <span className="bg-orange-500/20 text-orange-500 px-3 py-1 rounded-full text-xs font-bold border border-orange-500/50 flex items-center">
                    <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse mr-2"></div>
                    Mode Hors-ligne
                 </span>
-             )}
+             ) : offlineSalesCount > 0 ? (
+                <div className="flex items-center space-x-2">
+                   <span className="bg-yellow-500/20 text-yellow-500 px-3 py-1 rounded-full text-xs font-bold border border-yellow-500/50">
+                      {offlineSalesCount} vente(s) en attente
+                   </span>
+                   <button 
+                      onClick={syncOfflineSales} 
+                      disabled={isSyncing}
+                      className="bg-brand-surface hover:bg-brand-surface-light text-brand-text px-3 py-1 text-xs font-bold rounded-lg border border-brand-border disabled:opacity-50"
+                    >
+                      {isSyncing ? 'Synchronisation...' : 'Synchroniser'}
+                   </button>
+                </div>
+             ) : null}
           </div>
           <div className="relative flex-1 lg:w-96 lg:flex-none">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
