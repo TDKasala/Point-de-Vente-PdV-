@@ -55,11 +55,14 @@ export default function Login() {
       });
 
       if (error) {
+        console.error("Supabase Auth Error:", error);
         let msg = error.message;
         if (msg.includes('Invalid login credentials')) {
           msg = "Identifiants invalides. Vérifiez votre email et mot de passe.";
         } else if (msg.includes('Email not confirmed')) {
           msg = "Email non confirmé. Veuillez vérifier votre boîte de réception.";
+        } else if (msg.includes('User not found')) {
+          msg = "Utilisateur non trouvé. Veuillez vous inscrire.";
         }
         setError(msg);
       }

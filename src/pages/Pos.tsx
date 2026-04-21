@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Search, Plus, Minus, Trash2, Camera, User, 
@@ -17,6 +17,13 @@ interface ReceiptData {
   paymentMethod: string;
 }
 
+interface FlyAnimation {
+  id: number;
+  startX: number;
+  startY: number;
+  image: string | null;
+}
+
 export default function Pos() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -31,11 +38,32 @@ export default function Pos() {
   const [successMessage, setSuccessMessage] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false); // New state for mobile cart toggle
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
+  const [flyAnims, setFlyAnims] = useState<FlyAnimation[]>([]);
+  const desktopCartRef = useRef<HTMLDivElement>(null);
+  const mobileCartRef = useRef<HTMLButtonElement>(null);
 
   const [currency, setCurrency] = useState('R');
 
   const cart = usePosStore((state) => state.cart);
-  const addToCart = usePosStore((state) => state.addToCart);
+  const addToCartInternal = usePosStore((state) => state.addToCart);
+  
+  const addToCart = (e: React.MouseEvent, product: Product) => {
+    addToCartInternal(product);
+    
+    // Get starting point from the click event's target (the button)
+    const rect = e.currentTarget.getBoundingClientRect();
+    const startX = rect.left + rect.width / 2;
+    const startY = rect.top + rect.height / 2;
+
+    const id = Date.now();
+    setFlyAnims(prev => [...prev, { id, startX, startY, image: product.image_url }]);
+    
+    // Auto-remove animation after it finishes
+    setTimeout(() => {
+      setFlyAnims(prev => prev.filter(anim => anim.id !== id));
+    }, 800);
+  };
+
   const removeFromCart = usePosStore((state) => state.removeFromCart);
   const updateQuantity = usePosStore((state) => state.updateQuantity);
   const clearCart = usePosStore((state) => state.clearCart);
@@ -470,7 +498,7 @@ export default function Pos() {
                     visible: { opacity: 1, scale: 1 }
                   }}
                   key={product.id}
-                  onClick={() => addToCart(product)}
+                  onClick={(e) => addToCart(e, product)}
                   disabled={product.stock <= 0}
                   className={`group relative bg-white border border-brand-border/30 rounded-3xl overflow-hidden flex flex-col transition-all duration-300 ${
                     product.stock <= 0 
@@ -540,6 +568,7 @@ export default function Pos() {
       {/* Mobile Cart Floating Summary */}
       <div className="lg:hidden fixed bottom-4 left-4 right-4 z-40">
          <motion.button 
+          ref={mobileCartRef}
           whileTap={{ scale: 0.95 }}
           onClick={() => setIsCartOpen(true)}
           className="w-full bg-brand-text text-white p-4 rounded-2xl font-black text-sm tracking-widest shadow-2xl flex justify-between items-center"
@@ -561,7 +590,7 @@ export default function Pos() {
         {/* Cart Header */}
         <header className="px-8 py-6 border-b border-brand-border/30 flex items-center justify-between">
            <div className="flex items-center">
-              <div className="hidden lg:flex bg-brand-bg p-2.5 rounded-2xl border border-brand-border/20 mr-4">
+              <div ref={desktopCartRef} className="hidden lg:flex bg-brand-bg p-2.5 rounded-2xl border border-brand-border/20 mr-4">
                  <ShoppingCart size={22} className="text-brand-text" />
               </div>
               <div>
@@ -865,6 +894,49 @@ export default function Pos() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+      {/* Fly Animations Layer */}
+      <AnimatePresence>
+        {flyAnims.map(anim => {
+          // Determine target position based on screen size
+          let targetX = window.innerWidth - 100; // Default desktop right
+          let targetY = 100; // Default desktop top
+          
+          if (window.innerWidth < 1024) {
+            // Mobile target is the bottom button
+            targetX = window.innerWidth / 2;
+            targetY = window.innerHeight - 40;
+          } else if (desktopCartRef.current) {
+            const rect = desktopCartRef.current.getBoundingClientRect();
+            targetX = rect.left + rect.width / 2;
+            targetY = rect.top + rect.height / 2;
+          }
+
+          return (
+            <motion.div
+              key={anim.id}
+              initial={{ left: anim.startX - 24, top: anim.startY - 24, opacity: 1, scale: 1, rotate: 0 }}
+              animate={{ 
+                left: targetX - 24, 
+                top: targetY - 24, 
+                opacity: 0.2, 
+                scale: 0.4,
+                rotate: 360
+              }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+              className="fixed z-[9999] pointer-events-none w-12 h-12 bg-white rounded-2xl shadow-2xl border-2 border-brand-accent/30 overflow-hidden flex items-center justify-center p-1"
+            >
+              {anim.image ? (
+                <img src={anim.image} className="w-full h-full object-cover rounded-xl" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="bg-brand-bg w-full h-full rounded-xl flex items-center justify-center">
+                   <ShoppingCart size={18} className="text-brand-accent" />
+                </div>
+              )}
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );
