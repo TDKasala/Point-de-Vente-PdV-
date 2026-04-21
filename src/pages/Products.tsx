@@ -320,7 +320,7 @@ export default function Products() {
                     </td>
                     <td className="px-2 sm:px-6 py-1 sm:py-5 whitespace-nowrap">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Prix:</span>
-                      <span className="text-base font-bold text-brand-accent">R {product.price.toFixed(2)}</span>
+                      <span className="text-base font-bold text-brand-accent">{product.price.toFixed(2)} R</span>
                     </td>
                     <td className="px-2 sm:px-6 py-1 sm:py-5 whitespace-nowrap">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Stock:</span>

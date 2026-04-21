@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../hooks/useAuth';
-import { ReceiptText, CreditCard, Banknote, Smartphone, FileText, Undo2, X, AlertCircle } from 'lucide-react';
+import { ReceiptText, CreditCard, Banknote, Smartphone, FileText, Undo2, X, AlertCircle, TrendingUp } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface SaleItem {
   id: string;
@@ -49,6 +50,31 @@ export default function History() {
     }
     setLoading(false);
   };
+
+  const getChartData = () => {
+    // Generate last 7 days
+    const last7Days = [...Array(7)].map((_, i) => {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0); // Normalize to midnight
+      d.setDate(d.getDate() - (6 - i));
+      return d.toISOString().split('T')[0];
+    });
+
+    const dataMap = sales.reduce((acc: Record<string, number>, sale) => {
+      if (sale.status === 'refunded') return acc;
+      const date = sale.created_at.split('T')[0];
+      acc[date] = (acc[date] || 0) + sale.total;
+      return acc;
+    }, {});
+
+    return last7Days.map(date => ({
+      name: new Date(date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }),
+      total: dataMap[date] || 0
+    }));
+  };
+
+  const chartData = getChartData();
+  const totalLast7Days = chartData.reduce((sum, day) => sum + day.total, 0);
 
   const getPaymentIcon = (method: string) => {
     switch (method) {
@@ -112,10 +138,10 @@ export default function History() {
      if (sale.sale_items) {
         sale.sale_items.forEach(i => {
            let pName = i.products?.name || 'Produit Inconnu';
-           text += `${i.quantity}x ${pName} - R ${(i.price * i.quantity).toFixed(2)}\n`;
+           text += `${i.quantity}x ${pName} - ${(i.price * i.quantity).toFixed(2)} R\n`;
         });
      }
-     text += `\n*Total: R ${sale.total.toFixed(2)}*\nMéthode: ${sale.payment_method}\n\nMerci pour votre visite !`;
+     text += `\n*Total: ${sale.total.toFixed(2)} R*\nMéthode: ${sale.payment_method}\n\nMerci pour votre visite !`;
      
      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
      window.open(url, '_blank');
@@ -127,6 +153,68 @@ export default function History() {
         <h1 className="text-3xl font-bold text-brand-text mb-2">Historique des ventes</h1>
         <p className="text-brand-text-muted">Consultez vos dernières transactions</p>
       </div>
+
+      {/* Sales Evolution Chart */}
+      {!loading && sales.length > 0 && (
+        <div className="mb-8 bg-brand-surface rounded-2xl border border-brand-border p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-sm font-bold text-brand-text-muted uppercase tracking-widest mb-1">Évolution des ventes (7j)</h2>
+              <div className="flex items-baseline space-x-2">
+                <span className="text-2xl font-black text-brand-accent">{totalLast7Days.toFixed(2)} R</span>
+                <span className="text-xs text-brand-text-muted font-medium">total sur la période</span>
+              </div>
+            </div>
+            <div className="bg-brand-accent/10 p-3 rounded-xl text-brand-accent">
+              <TrendingUp size={24} />
+            </div>
+          </div>
+          
+          <div className="h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#FB8C00" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#FB8C00" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="name" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }}
+                  dy={10}
+                />
+                <YAxis 
+                  hide={true} 
+                  domain={[0, 'auto']} 
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#ffffff', 
+                    borderRadius: '12px', 
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                    fontSize: '12px'
+                  }}
+                  formatter={(value: number) => [`${value.toFixed(2)} R`, 'Ventes']}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="total" 
+                  stroke="#FB8C00" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorTotal)" 
+                  animationDuration={1500}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       <div className="bg-brand-surface rounded-2xl border border-brand-border overflow-hidden">
         {loading ? (
@@ -178,7 +266,7 @@ export default function History() {
                     </td>
                     <td className="px-2 sm:px-6 mt-3 sm:mt-0 py-2 sm:py-5 whitespace-nowrap text-right border-t sm:border-0 border-brand-border pt-4 sm:pt-5">
                       <span className="sm:hidden text-xs text-brand-text-muted mr-2">Montant total:</span>
-                      <span className={`text-base font-bold ${sale.status === 'refunded' ? 'text-brand-text-muted line-through' : 'text-brand-accent'}`}>R {sale.total.toFixed(2)}</span>
+                      <span className={`text-base font-bold ${sale.status === 'refunded' ? 'text-brand-text-muted line-through' : 'text-brand-accent'}`}>{sale.total.toFixed(2)} R</span>
                     </td>
                   </tr>
                 ))}
@@ -222,7 +310,7 @@ export default function History() {
                          {item.quantity}x {item.products?.name || 'Produit inconnu'}
                        </span>
                        <span className="text-brand-text-muted text-right">
-                         R {(item.price * item.quantity).toFixed(2)}
+                         {(item.price * item.quantity).toFixed(2)} R
                        </span>
                      </div>
                    ))}
@@ -235,7 +323,7 @@ export default function History() {
                <div className="border-t border-brand-border pt-4">
                  <div className="flex justify-between items-center font-bold text-lg mb-2">
                    <span>Total</span>
-                   <span className={selectedSale.status === 'refunded' ? 'line-through text-brand-text-muted' : 'text-brand-accent'}>R {selectedSale.total.toFixed(2)}</span>
+                   <span className={selectedSale.status === 'refunded' ? 'line-through text-brand-text-muted' : 'text-brand-accent'}>{selectedSale.total.toFixed(2)} R</span>
                  </div>
                  <div className="flex justify-between items-center text-brand-text-muted">
                    <span>Moyen de paiement</span>

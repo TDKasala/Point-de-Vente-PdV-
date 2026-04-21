@@ -188,7 +188,7 @@ export default function Pos() {
   };
 
   const filteredProducts = products.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (p.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'Toutes' || (p.category || 'Général') === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -316,7 +316,7 @@ export default function Pos() {
     if (discountPercent > 0) {
       text += `Remise appliquée: ${discountPercent}%\n`;
     }
-    text += `Total: R ${getDiscountedTotal().toFixed(2)}\n\nÀ bientôt !`;
+    text += `Total: ${getDiscountedTotal().toFixed(2)} ${currency}\n\nÀ bientôt !`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
@@ -515,10 +515,9 @@ export default function Pos() {
                        </p>
                        <h3 className="font-bold text-brand-text text-sm leading-tight line-clamp-2">{product.name}</h3>
                     </div>
-                    <div className="flex items-baseline justify-between mt-auto pt-2 border-t border-brand-border/30">
-                       <p className="text-xs font-medium text-brand-text-muted opacity-70 uppercase tracking-tighter">Prix</p>
+                    <div className="flex items-baseline justify-end mt-auto pt-2 border-t border-brand-border/30">
                        <p className={`text-lg font-black ${product.stock <= 0 ? 'text-brand-text-muted' : 'text-brand-accent'}`}>
-                          {currency} {product.price.toFixed(2)}
+                          {product.price.toFixed(2)} {currency}
                        </p>
                     </div>
                   </div>
@@ -551,7 +550,7 @@ export default function Pos() {
             </div>
             <span>PANIER ({cart.length})</span>
           </div>
-          <span className="text-lg">{currency} {cartTotal().toFixed(2)}</span>
+          <span className="text-lg">{cartTotal().toFixed(2)} {currency}</span>
         </motion.button>
       </div>
 
@@ -630,9 +629,9 @@ export default function Pos() {
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between">
                          <h4 className="text-sm font-bold text-brand-text truncate pr-2 uppercase tracking-wide">{item.name}</h4>
-                         <p className="text-sm font-black text-brand-text">{currency} {(item.price * item.quantity).toFixed(2)}</p>
+                         <p className="text-sm font-black text-brand-text">{(item.price * item.quantity).toFixed(2)} {currency}</p>
                       </div>
-                      <p className="text-[10px] font-bold text-brand-text-muted mt-0.5 tracking-tighter">{currency} {item.price.toFixed(2)} / unité</p>
+                      <p className="text-[10px] font-bold text-brand-text-muted mt-0.5 tracking-tighter">{item.price.toFixed(2)} {currency} / unité</p>
                       
                       <div className="flex items-center justify-between mt-4">
                          <div className="flex items-center space-x-1 bg-white p-1 rounded-2xl border border-brand-border/20 shadow-sm">
@@ -693,18 +692,18 @@ export default function Pos() {
             <div className="space-y-2 pt-2">
               <div className="flex justify-between px-1">
                 <span className="text-xs font-bold text-brand-text-muted uppercase tracking-tighter">Sous-total</span>
-                <span className="text-xs font-bold text-brand-text">{currency} {cartTotal().toFixed(2)}</span>
+                <span className="text-xs font-bold text-brand-text">{cartTotal().toFixed(2)} {currency}</span>
               </div>
               {discountPercent > 0 && (
                 <div className="flex justify-between px-1">
                   <span className="text-xs font-bold text-red-500 uppercase tracking-tighter">Remise</span>
-                  <span className="text-xs font-bold text-red-500">- {currency} {(cartTotal() * (discountPercent / 100)).toFixed(2)}</span>
+                  <span className="text-xs font-bold text-red-500">- {(cartTotal() * (discountPercent / 100)).toFixed(2)} {currency}</span>
                 </div>
               )}
               <div className="flex justify-between items-center pt-2 border-t border-brand-border/30">
                 <span className="text-sm font-black text-brand-text uppercase tracking-tight">Net à payer</span>
                 <span className="text-3xl font-black text-brand-text tracking-tight animate-in fade-in transition-all">
-                   {currency} {getDiscountedTotal().toFixed(2)}
+                   {getDiscountedTotal().toFixed(2)} {currency}
                 </span>
               </div>
             </div>
@@ -748,14 +747,13 @@ export default function Pos() {
               
               <h2 className="text-2xl font-black text-center mb-2 text-brand-text tracking-tight uppercase">Confirmer la Vente</h2>
               <p className="text-center text-[10px] font-bold text-brand-text-muted tracking-widest uppercase mb-8 opacity-60">Paiement uniquement en espèces</p>
-              
               <div className="bg-brand-bg rounded-[2rem] p-8 mb-10 flex flex-col items-center">
                  <div className="bg-brand-accent/10 p-4 rounded-3xl text-brand-accent mb-4">
                     <Wallet size={48} />
                  </div>
                  <p className="text-sm font-bold text-brand-text-muted uppercase tracking-widest mb-1">Total à encaisser</p>
                  <p className="text-4xl font-black text-brand-text tracking-tighter">
-                    {currency} {getDiscountedTotal().toFixed(2)}
+                    {getDiscountedTotal().toFixed(2)} {currency}
                  </p>
               </div>
 
@@ -765,7 +763,7 @@ export default function Pos() {
                   disabled={processing}
                   className="w-full bg-brand-accent text-white font-black py-5 rounded-[2.5rem] disabled:opacity-30 hover:bg-brand-accent-hover text-lg shadow-xl shadow-brand-accent/20 transition-all active:scale-95"
                 >
-                  {processing ? 'TRAITEMENT EN COURS...' : `CONFIRMER ${currency} ${getDiscountedTotal().toFixed(2)}`}
+                  {processing ? 'TRAITEMENT EN COURS...' : `CONFIRMER ${getDiscountedTotal().toFixed(2)} ${currency}`}
                 </button>
                 <button
                   onClick={() => setPaymentModalOpen(false)}
@@ -810,10 +808,10 @@ export default function Pos() {
                     <div key={idx} className="flex justify-between items-center group">
                       <div className="flex flex-col">
                         <span className="text-sm font-bold text-brand-text uppercase tracking-tight">{item.name}</span>
-                        <span className="text-[10px] font-bold text-brand-text-muted uppercase opacity-60">{item.quantity} x {currency} {item.price.toFixed(2)}</span>
+                        <span className="text-[10px] font-bold text-brand-text-muted uppercase opacity-60">{item.quantity} x {item.price.toFixed(2)} {currency}</span>
                       </div>
                       <span className="font-black text-brand-text">
-                        {currency} {(item.price * item.quantity).toFixed(2)}
+                        {(item.price * item.quantity).toFixed(2)} {currency}
                       </span>
                     </div>
                   ))}
@@ -822,7 +820,7 @@ export default function Pos() {
                 <div className="border-t border-brand-border/40 border-dashed pt-8 space-y-3">
                   <div className="flex justify-between items-center text-xs font-bold text-brand-text-muted uppercase tracking-widest">
                     <span>Total Net</span>
-                    <span className="text-2xl font-black text-brand-accent tracking-tighter">{currency} {receiptData.total.toFixed(2)}</span>
+                    <span className="text-2xl font-black text-brand-accent tracking-tighter">{receiptData.total.toFixed(2)} {currency}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-[10px] font-bold text-brand-text-muted uppercase tracking-widest opacity-60">Mode de paiement</span>
@@ -835,8 +833,8 @@ export default function Pos() {
                  <button 
                    onClick={() => {
                      const text = `*Ticket de Caisse*\nReçu: ${receiptData.saleId.slice(0, 8).toUpperCase()}\nDate: ${receiptData.date.toLocaleString('fr-FR')}\n\n` +
-                                  receiptData.items.map(i => `${i.quantity}x ${i.name} - ${currency} ${(i.price * i.quantity).toFixed(2)}`).join('\n') +
-                                  `\n\n*Total: ${currency} ${receiptData.total.toFixed(2)}*\nMéthode: ${receiptData.paymentMethod}\n\nMerci pour votre visite !`;
+                                  receiptData.items.map(i => `${i.quantity}x ${i.name} - ${(i.price * i.quantity).toFixed(2)} ${currency}`).join('\n') +
+                                  `\n\n*Total: ${receiptData.total.toFixed(2)} ${currency}*\nMéthode: ${receiptData.paymentMethod}\n\nMerci pour votre visite !`;
                      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
                      window.open(url, '_blank');
                    }}

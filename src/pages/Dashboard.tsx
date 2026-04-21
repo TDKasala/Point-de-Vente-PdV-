@@ -173,7 +173,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Revenus (Ajourd'hui)</p>
               <h3 className="text-3xl font-bold text-brand-accent">
-                {loading ? '-' : `${currency} ${stats.todayRevenue.toFixed(0)}`}
+                {loading ? '-' : `${stats.todayRevenue.toFixed(0)} ${currency}`}
               </h3>
             </div>
             <div className="p-3 bg-brand-accent/10 text-brand-accent rounded-xl">
@@ -187,7 +187,7 @@ export default function Dashboard() {
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Revenus (7 jours)</p>
               <h3 className="text-3xl font-bold text-brand-text">
-                {loading ? '-' : `${currency} ${stats.weeklyRevenue.toFixed(0)}`}
+                {loading ? '-' : `${stats.weeklyRevenue.toFixed(0)} ${currency}`}
               </h3>
             </div>
             <div className="p-3 bg-brand-surface-light text-brand-text-muted rounded-xl">
@@ -232,7 +232,7 @@ export default function Dashboard() {
                      <p className="font-bold text-brand-text">{p.name}</p>
                      <p className="text-xs text-brand-text-muted">{p.sold} unités vendues</p>
                    </div>
-                   <div className="font-bold text-brand-accent">R {p.revenue.toFixed(2)}</div>
+                   <div className="font-bold text-brand-accent">{p.revenue.toFixed(2)} R</div>
                  </div>
                ))}
              </div>
