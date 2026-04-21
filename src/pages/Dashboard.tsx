@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Activity, CreditCard, AlertTriangle, TrendingUp, Package, Star } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { motion } from 'motion/react';
 
 interface DashboardStats {
   todaySalesCount: number;
@@ -22,6 +23,7 @@ export default function Dashboard() {
     topProducts: [],
     lowStockList: []
   });
+  const [currency, setCurrency] = useState('R');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,6 +32,10 @@ export default function Dashboard() {
     const fetchStats = async () => {
       setLoading(true);
       try {
+        // Fetch currency from settings
+        const { data: settings } = await supabase.from('user_settings').select('currency_symbol').eq('user_id', user.id).single();
+        if (settings?.currency_symbol) setCurrency(settings.currency_symbol);
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
@@ -113,6 +119,28 @@ export default function Dashboard() {
     fetchStats();
   }, [user]);
 
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        ease: "easeOut"
+      }
+    }
+  };
+
   return (
     <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       <div className="mb-6">
@@ -120,8 +148,13 @@ export default function Dashboard() {
         <p className="text-brand-text-muted">Aperçu de vos activités de la semaine.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between hover:shadow-lg transition-shadow">
+      <motion.div 
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"
+      >
+        <motion.div variants={itemVariants} className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between hover:shadow-lg transition-shadow">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Ventes (Aujourd'hui)</p>
@@ -133,37 +166,37 @@ export default function Dashboard() {
               <Activity size={24} />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between hover:border-brand-accent/50 transition-colors">
+        <motion.div variants={itemVariants} className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between hover:border-brand-accent/50 transition-colors">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Revenus (Ajourd'hui)</p>
               <h3 className="text-3xl font-bold text-brand-accent">
-                {loading ? '-' : `R ${stats.todayRevenue.toFixed(0)}`}
+                {loading ? '-' : `${currency} ${stats.todayRevenue.toFixed(0)}`}
               </h3>
             </div>
             <div className="p-3 bg-brand-accent/10 text-brand-accent rounded-xl">
               <CreditCard size={24} />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between">
+        <motion.div variants={itemVariants} className="bg-brand-surface rounded-2xl border border-brand-border p-6 flex flex-col justify-between">
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Revenus (7 jours)</p>
               <h3 className="text-3xl font-bold text-brand-text">
-                {loading ? '-' : `R ${stats.weeklyRevenue.toFixed(0)}`}
+                {loading ? '-' : `${currency} ${stats.weeklyRevenue.toFixed(0)}`}
               </h3>
             </div>
             <div className="p-3 bg-brand-surface-light text-brand-text-muted rounded-xl">
               <TrendingUp size={24} />
             </div>
           </div>
-        </div>
+        </motion.div>
 
-        <div className={`bg-brand-surface rounded-2xl border transition-colors p-6 flex flex-col justify-between ${stats.lowStockItems > 0 ? 'border-red-500/50' : 'border-brand-border'}`}>
+        <motion.div variants={itemVariants} className={`bg-brand-surface rounded-2xl border transition-colors p-6 flex flex-col justify-between ${stats.lowStockItems > 0 ? 'border-red-500/50' : 'border-brand-border'}`}>
           <div className="flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-brand-text-muted mb-1">Alertes de Stock</p>
@@ -176,8 +209,8 @@ export default function Dashboard() {
               <AlertTriangle size={24} />
             </div>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
       
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
          {/* Top Products */}

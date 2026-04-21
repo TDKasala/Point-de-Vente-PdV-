@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Navigate, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Archive, LogOut, History, ShieldAlert, Lock, Unlock, KeyRound, X } from 'lucide-react';
+import { 
+  LayoutDashboard, ShoppingCart, Package, Archive, LogOut, 
+  History, ShieldAlert, Lock, Unlock, KeyRound, X, Settings 
+} from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -10,6 +13,7 @@ export function ProtectedLayout() {
   const navigate = useNavigate();
 
   const [dbPin, setDbPin] = useState<string | null>(null);
+  const [storeName, setStoreName] = useState<string>('PdV Mobile');
   const [isCashierMode, setIsCashierMode] = useState<boolean>(() => {
     return localStorage.getItem('pos_mode') === 'cashier';
   });
@@ -21,11 +25,10 @@ export function ProtectedLayout() {
   useEffect(() => {
     if (!user) return;
     const fetchSettings = async () => {
-       const { data } = await supabase.from('user_settings').select('pin_code').eq('user_id', user.id).single();
-       if (data && data.pin_code) {
-          setDbPin(data.pin_code);
-       } else {
-          setDbPin(null);
+       const { data } = await supabase.from('user_settings').select('pin_code, store_name').eq('user_id', user.id).single();
+       if (data) {
+          if (data.pin_code) setDbPin(data.pin_code);
+          if (data.store_name) setStoreName(data.store_name);
        }
     };
     fetchSettings();
@@ -83,6 +86,7 @@ export function ProtectedLayout() {
       { path: '/produits', icon: <Package size={24} />, label: 'Produits' },
       { path: '/stock', icon: <Archive size={24} />, label: 'Stock' },
       { path: '/historique', icon: <History size={24} />, label: 'Historique' },
+      { path: '/parametres', icon: <Settings size={24} />, label: 'Paramètres' },
     ];
     if (user?.email === 'deniskasala17@gmail.com') {
       navItems.push({ path: '/admin', icon: <ShieldAlert size={24} />, label: 'Superadmin' });
@@ -99,7 +103,7 @@ export function ProtectedLayout() {
       {/* Sidebar for Desktop, Bottom Nav for Mobile */}
       <nav className="fixed bottom-0 w-full bg-brand-surface border-t border-brand-border md:relative md:w-64 md:border-t-0 md:border-r md:flex md:flex-col z-50">
         <div className="hidden md:flex p-6 items-center justify-center border-b border-brand-border">
-          <h1 className="text-2xl font-bold text-brand-text">PdV Mobile</h1>
+          <h1 className="text-2xl font-bold text-brand-text truncate px-2">{storeName}</h1>
         </div>
         <div className="flex w-full md:flex-col md:flex-1 md:py-6 md:px-2 gap-2 overflow-x-auto">
           {navItems.map((item) => {
@@ -155,7 +159,7 @@ export function ProtectedLayout() {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 pb-20 md:pb-0 overflow-y-auto w-full max-w-7xl mx-auto p-4 md:p-6 lg:p-8">
+      <main className="flex-1 pb-20 md:pb-0 overflow-y-auto w-full">
         <Outlet />
       </main>
 

@@ -122,7 +122,7 @@ export default function History() {
   };
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 max-w-5xl mx-auto font-sans">
+    <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto font-sans">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-brand-text mb-2">Historique des ventes</h1>
         <p className="text-brand-text-muted">Consultez vos dernières transactions</p>
