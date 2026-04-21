@@ -11,6 +11,7 @@ import Pos from './pages/Pos';
 import Products from './pages/Products';
 import Stock from './pages/Stock';
 import History from './pages/History';
+import AdminDashboard from './pages/AdminDashboard';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/produits" element={<Products />} />
           <Route path="/stock" element={<Stock />} />
           <Route path="/historique" element={<History />} />
+          <Route path="/admin" element={<AdminDashboard />} />
         </Route>
         
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

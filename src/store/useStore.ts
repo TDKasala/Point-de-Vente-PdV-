@@ -29,13 +29,21 @@ export const usePosStore = create<PosState>((set, get) => ({
   addToCart: (product) => set((state) => {
     const existing = state.cart.find((item) => item.id === product.id);
     if (existing) {
+      // Limite la quantité ajoutée au stock disponible
+      const newQuantity = Math.min(existing.quantity + 1, product.stock);
       return {
         cart: state.cart.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.id === product.id ? { ...item, quantity: newQuantity } : item
         ),
       };
     }
-    return { cart: [...state.cart, { ...product, quantity: 1 }] };
+    
+    // Si on ajoute le produit pour la première fois, on s'assure qu'il y a du stock
+    if (product.stock > 0) {
+      return { cart: [...state.cart, { ...product, quantity: 1 }] };
+    }
+    
+    return state; // Ne rien faire si stock = 0
   }),
   removeFromCart: (productId) => set((state) => ({
     cart: state.cart.filter((item) => item.id !== productId)
@@ -46,7 +54,8 @@ export const usePosStore = create<PosState>((set, get) => ({
     }
     return {
       cart: state.cart.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
+        // On s'assure ici aussi que l'update manuel ne dépasse pas le stock
+        item.id === productId ? { ...item, quantity: Math.min(quantity, item.stock) } : item
       )
     };
   }),

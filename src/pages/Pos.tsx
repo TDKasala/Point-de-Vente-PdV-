@@ -6,6 +6,8 @@ import { useAuth } from '../hooks/useAuth';
 import { Html5Qrcode } from 'html5-qrcode';
 
 function BarcodeScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (code: string) => void }) {
+  const [errorMsg, setErrorMsg] = useState('');
+
   useEffect(() => {
     const html5QrCode = new Html5Qrcode("reader");
     let isComponentMounted = true;
@@ -22,21 +24,23 @@ function BarcodeScannerModal({ onClose, onScan }: { onClose: () => void, onScan:
         // Ignorer les erreurs frame par frame
       }
     ).catch(err => {
-      console.error(err);
       if (isComponentMounted) {
-        alert("Erreur d'accès à la caméra. Vérifiez vos permissions.");
-        onClose();
+        if (err?.name === 'NotAllowedError' || String(err).includes('Permission denied')) {
+          setErrorMsg("Accès à la caméra refusé. Veuillez autoriser l'utilisation de l'appareil photo dans votre navigateur.");
+        } else {
+          setErrorMsg("Erreur d'accès à la caméra. Vérifiez que votre appareil possède une caméra disponible.");
+        }
       }
     });
 
     return () => {
       isComponentMounted = false;
-      if (html5QrCode) {
-        try {
-           html5QrCode.stop().then(() => html5QrCode.clear()).catch(console.error);
-        } catch (err) {
-           console.error("Erreur à l'arrêt du scanner", err);
-        }
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(() => {
+           html5QrCode.clear();
+        }).catch(err => {
+           console.error("Erreur lors de l'arrêt du scanner", err);
+        });
       }
     };
   }, [onClose, onScan]);
@@ -51,6 +55,11 @@ function BarcodeScannerModal({ onClose, onScan }: { onClose: () => void, onScan:
           </button>
         </div>
         <div className="p-6">
+           {errorMsg && (
+              <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 text-center text-sm font-medium">
+                 {errorMsg}
+              </div>
+           )}
            <div id="reader" className="w-full bg-black rounded-xl overflow-hidden shadow-inner min-h-[250px]"></div>
            <p className="text-center text-brand-text-muted text-sm mt-6">Placez le code-barres ou le QR code au centre du cadre.</p>
         </div>
@@ -69,6 +78,7 @@ export default function Pos() {
   const [processing, setProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false); // New state for mobile cart toggle
 
   const cart = usePosStore((state) => state.cart);
   const addToCart = usePosStore((state) => state.addToCart);
@@ -269,10 +279,35 @@ export default function Pos() {
       </div>
 
       {/* Right side - Cart */}
-      <aside className="lg:w-[340px] bg-brand-surface border-l border-brand-border flex flex-col h-[60vh] lg:h-[calc(100vh)] fixed bottom-16 lg:static w-full z-40 transform transition-transform lg:transform-none">
-        <div className="p-6 border-b border-brand-border flex justify-between items-center">
-          <span className="font-bold text-xl text-brand-text">Panier</span>
-          <span className="text-brand-text-muted text-sm">{cart.length} articles</span>
+      {/* Mobile Cart Summary (Sticky Bottom) */}
+      <div className="lg:hidden fixed bottom-[72px] md:bottom-20 left-0 right-0 p-4 bg-brand-surface border-t border-brand-border z-30 flex justify-between items-center shadow-[0_-10px_30px_rgba(0,0,0,0.4)]">
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-brand-text-muted">{cart.length} article(s)</span>
+          <span className="text-lg font-bold text-brand-accent">R {cartTotal().toFixed(2)}</span>
+        </div>
+        <button 
+          onClick={() => setIsCartOpen(true)}
+          className="bg-brand-accent text-white px-6 py-3 rounded-xl font-bold hover:bg-brand-accent-hover active:scale-95 transition-all shadow-lg flex items-center"
+        >
+          <ShoppingCart size={20} className="mr-2" />
+          Panier
+        </button>
+      </div>
+
+      {/* Cart Drawer / Sidebar */}
+      <aside className={`bg-brand-surface flex flex-col fixed inset-0 z-50 lg:static lg:w-[360px] xl:w-[400px] lg:h-[calc(100vh)] lg:border-l border-brand-border transform transition-transform duration-300 ease-in-out ${isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}`}>
+        {/* Cart Header */}
+        <div className="p-4 md:p-6 border-b border-brand-border flex justify-between items-center bg-brand-surface pt-8 md:pt-6">
+          <div className="flex items-center gap-3">
+            <button 
+              className="lg:hidden p-2 bg-brand-surface-light rounded-xl text-brand-text-muted hover:text-white transition-colors" 
+              onClick={() => setIsCartOpen(false)}
+            >
+              <X size={24} />
+            </button>
+            <span className="font-bold text-xl text-brand-text">Panier</span>
+          </div>
+          <span className="text-brand-text-muted text-sm bg-brand-surface-light px-3 py-1.5 rounded-lg">{cart.length} articles</span>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -283,26 +318,40 @@ export default function Pos() {
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="flex justify-between items-center bg-brand-surface-light p-3 rounded-xl border border-transparent">
-                <div className="flex-1 pr-3">
-                  <div className="font-semibold text-sm text-brand-text mb-1">{item.name}</div>
-                  <div className="text-xs text-brand-text-muted">R {item.price.toFixed(2)} x {item.quantity}</div>
+              <div key={item.id} className="flex flex-col bg-brand-surface-light p-4 rounded-xl border border-transparent">
+                <div className="flex justify-between items-start mb-3">
+                  <div className="flex-1 pr-3">
+                    <div className="font-semibold text-base text-brand-text mb-1">{item.name}</div>
+                    <div className="text-sm text-brand-text-muted">R {item.price.toFixed(2)} / unité</div>
+                  </div>
+                  <div className="font-bold text-brand-accent">
+                    R {(item.price * item.quantity).toFixed(2)}
+                  </div>
                 </div>
-                <div className="flex items-center space-x-3">
+                <div className="flex items-center justify-between mt-2 pt-3 border-t border-brand-border/50">
                   <button 
-                    onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                    className="w-8 h-8 rounded-md bg-brand-border text-brand-text flex items-center justify-center hover:bg-brand-text-muted active:opacity-80"
+                    onClick={() => removeFromCart(item.id)}
+                    className="p-3 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-xl transition-colors flex items-center justify-center"
+                    title="Retirer du panier"
                   >
-                    <Minus size={16} />
+                    <Trash2 size={22} />
                   </button>
-                  <span className="font-medium text-sm w-4 text-center text-brand-text">{item.quantity}</span>
-                  <button 
-                    onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                    disabled={item.quantity >= item.stock}
-                    className="w-8 h-8 rounded-md bg-brand-border text-brand-text flex items-center justify-center hover:bg-brand-text-muted disabled:opacity-50 active:opacity-80"
-                  >
-                    <Plus size={16} />
-                  </button>
+                  <div className="flex items-center space-x-4 bg-brand-bg rounded-xl p-1 border border-brand-border">
+                    <button 
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      className="w-12 h-10 rounded-lg bg-brand-surface text-brand-text flex items-center justify-center hover:bg-brand-text-muted active:scale-95 transition-all shadow-sm"
+                    >
+                      <Minus size={20} />
+                    </button>
+                    <span className="font-bold text-lg w-8 text-center text-brand-text">{item.quantity}</span>
+                    <button 
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      disabled={item.quantity >= item.stock}
+                      className="w-12 h-10 rounded-lg bg-brand-surface text-brand-text flex items-center justify-center hover:bg-brand-text-muted disabled:opacity-40 active:scale-95 transition-all shadow-sm"
+                    >
+                      <Plus size={20} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))

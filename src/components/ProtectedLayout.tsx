@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Archive, LogOut, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Archive, LogOut, History, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 
@@ -27,6 +27,10 @@ export function ProtectedLayout() {
     { path: '/stock', icon: <Archive size={24} />, label: 'Stock' },
     { path: '/historique', icon: <History size={24} />, label: 'Historique' },
   ];
+
+  if (user?.email === 'deniskasala17@gmail.com') {
+    navItems.push({ path: '/admin', icon: <ShieldAlert size={24} />, label: 'Superadmin' });
+  }
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col md:flex-row">

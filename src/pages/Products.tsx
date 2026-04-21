@@ -62,25 +62,59 @@ export default function Products() {
     setEditingProduct(null);
   };
 
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      if (!e.target.files || e.target.files.length === 0 || !user) return;
+      const file = e.target.files[0];
+      
+      // Check file size (max 1MB = 1048576 bytes)
+      if (file.size > 1048576) {
+        alert("L'image est trop grande. La taille maximale est de 1 Mo.");
+        return;
+      }
+      
+      setUploadingImage(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Math.random()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('product_images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('product_images')
+        .getPublicUrl(filePath);
+
+      if (data.publicUrl) {
+          setFormData({ ...formData, image_url: data.publicUrl });
+      }
+    } catch (error: any) {
+      console.error('Erreur lors de l\'upload:', error);
+      alert("Erreur lors de l'envoi de l'image. Assurez-vous d'avoir exécuté la requête SQL de création du bucket de stockage (product_images).");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
     let finalImageUrl = formData.image_url.trim();
 
-    if (!finalImageUrl && formData.name.trim()) {
-      // Génère une icône abstraite unique en fonction du nom du produit via DiceBear
-      // et l'intègre parfaitement avec notre thème "Elegant Dark" (Fond: #1F2937, Accent: #10B981 etc.)
-      const seedName = encodeURIComponent(formData.name.trim());
-      finalImageUrl = `https://api.dicebear.com/7.x/shapes/svg?seed=${seedName}&backgroundColor=1F2937&shape1Color=10b981&shape2Color=4b5563&shape3Color=9ca3af`;
-    }
-
     const productData = {
       name: formData.name,
       price: parseFloat(formData.price),
       stock: parseInt(formData.stock, 10),
-      barcode: formData.barcode,
-      image_url: finalImageUrl,
+      barcode: formData.barcode || null,
+      image_url: finalImageUrl || null,
       user_id: user.id
     };
 
@@ -258,14 +292,51 @@ export default function Products() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-brand-text-muted mb-2">URL de l'image (optionnel)</label>
-                  <input
-                    type="url"
-                    value={formData.image_url}
-                    onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                    className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:border-brand-accent text-brand-text transition-colors"
-                    placeholder="https://..."
-                  />
+                  <label className="block text-sm font-semibold text-brand-text-muted mb-2">Photo du produit (Optionnel, Max 1MB)</label>
+                  
+                  {formData.image_url ? (
+                    <div className="flex items-center space-x-4 mb-3">
+                       <div className="relative inline-block">
+                         <img src={formData.image_url} alt="Preview" className="h-24 w-24 object-cover rounded-xl border border-brand-border bg-brand-surface-light" />
+                         <button
+                           type="button"
+                           onClick={() => setFormData({...formData, image_url: ''})}
+                           className="absolute -top-2 -right-2 bg-red-500 rounded-full p-1 text-white hover:bg-red-600 shadow-md"
+                           title="Supprimer l'image"
+                         >
+                            <X size={14} />
+                         </button>
+                       </div>
+                       <div className="flex-1">
+                          <label className="cursor-pointer inline-block bg-brand-surface-light hover:bg-brand-border border border-brand-border text-brand-text px-4 py-2 rounded-xl text-sm font-medium transition-colors">
+                            Sélectionner une autre photo
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageUpload}
+                              disabled={uploadingImage}
+                              className="hidden"
+                            />
+                          </label>
+                          {uploadingImage && <p className="text-xs text-brand-accent mt-2 animate-pulse">Téléversement...</p>}
+                       </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="cursor-pointer bg-brand-bg hover:bg-brand-surface-light border border-dashed border-brand-border text-brand-text-muted flex flex-col items-center justify-center p-6 rounded-xl transition-colors">
+                        <ImageIcon size={32} className="mb-2 opacity-50" />
+                        <span className="text-sm font-medium">Cliquez pour ajouter une photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          disabled={uploadingImage}
+                          className="hidden"
+                        />
+                      </label>
+                      {uploadingImage && <p className="text-xs text-brand-accent mt-2 animate-pulse text-center">Téléversement en cours...</p>}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="mt-8 flex space-x-4">
