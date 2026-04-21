@@ -16,7 +16,8 @@ export default function Products() {
     price: '',
     stock: '',
     barcode: '',
-    image_url: ''
+    image_url: '',
+    category: 'Général'
   });
 
   useEffect(() => {
@@ -48,11 +49,12 @@ export default function Products() {
         price: product.price.toString(),
         stock: product.stock.toString(),
         barcode: product.barcode || '',
-        image_url: product.image_url || ''
+        image_url: product.image_url || '',
+        category: product.category || 'Général'
       });
     } else {
       setEditingProduct(null);
-      setFormData({ name: '', price: '', stock: '', barcode: '', image_url: '' });
+      setFormData({ name: '', price: '', stock: '', barcode: '', image_url: '', category: 'Général' });
     }
     setModalOpen(true);
   };
@@ -115,6 +117,7 @@ export default function Products() {
       stock: parseInt(formData.stock, 10),
       barcode: formData.barcode || null,
       image_url: finalImageUrl || null,
+      category: formData.category || 'Général',
       user_id: user.id
     };
 
@@ -282,14 +285,26 @@ export default function Products() {
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold text-brand-text-muted mb-2">Code barre (optionnel)</label>
-                  <input
-                    type="text"
-                    value={formData.barcode}
-                    onChange={(e) => setFormData({...formData, barcode: e.target.value})}
-                    className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:border-brand-accent text-brand-text transition-colors"
-                  />
+                <div className="grid grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-sm font-semibold text-brand-text-muted mb-2">Code barre (optionnel)</label>
+                    <input
+                      type="text"
+                      value={formData.barcode}
+                      onChange={(e) => setFormData({...formData, barcode: e.target.value})}
+                      className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:border-brand-accent text-brand-text transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-brand-text-muted mb-2">Catégorie</label>
+                    <input
+                      type="text"
+                      value={formData.category}
+                      onChange={(e) => setFormData({...formData, category: e.target.value})}
+                      placeholder="Ex: Boissons, Snacks..."
+                      className="w-full px-4 py-3 bg-brand-bg border border-brand-border rounded-xl focus:outline-none focus:border-brand-accent text-brand-text transition-colors"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-brand-text-muted mb-2">Photo du produit (Optionnel, Max 1MB)</label>

@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, Plus, Minus, Trash2, Camera, User, BadgeAlert, ShoppingCart, ScanLine, X } from 'lucide-react';
-import { usePosStore, Product } from '../store/useStore';
+import { Search, Plus, Minus, Trash2, Camera, User, BadgeAlert, ShoppingCart, ScanLine, X, Check, FileText } from 'lucide-react';
+import { usePosStore, Product, CartItem } from '../store/useStore';
 import { useAuth } from '../hooks/useAuth';
 import { Html5Qrcode } from 'html5-qrcode';
+
+interface ReceiptData {
+  saleId: string;
+  date: Date;
+  items: CartItem[];
+  total: number;
+  paymentMethod: string;
+}
 
 function BarcodeScannerModal({ onClose, onScan }: { onClose: () => void, onScan: (code: string) => void }) {
   const [errorMsg, setErrorMsg] = useState('');
@@ -72,13 +80,16 @@ export default function Pos() {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('Toutes');
   const [loading, setLoading] = useState(true);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'Espèces' | 'Mobile Money' | 'Carte'>('Espèces');
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [processing, setProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false); // New state for mobile cart toggle
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
 
   const cart = usePosStore((state) => state.cart);
   const addToCart = usePosStore((state) => state.addToCart);
@@ -87,31 +98,114 @@ export default function Pos() {
   const clearCart = usePosStore((state) => state.clearCart);
   const cartTotal = usePosStore((state) => state.cartTotal);
 
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => { setIsOnline(true); syncOfflineSales(); };
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+       window.removeEventListener('online', handleOnline);
+       window.removeEventListener('offline', handleOffline);
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchProducts();
-  }, [user]);
+  }, [user, isOnline]);
+
+  const syncOfflineSales = async () => {
+     const queue = JSON.parse(localStorage.getItem('offline_sales_queue') || '[]');
+     if (queue.length === 0 || !user) return;
+     
+     const failedQueue = [];
+
+     for (const sale of queue) {
+        try {
+          const { data: saleData, error: saleError } = await supabase.from('sales').insert({
+             total: sale.total,
+             payment_method: sale.payment_method,
+             user_id: sale.user_id,
+             created_at: sale.created_at
+          }).select().single();
+
+          if (saleError) throw saleError;
+
+          const itemsToInsert = sale.items.map((item:any) => ({
+             sale_id: saleData.id,
+             product_id: item.product_id,
+             quantity: item.quantity,
+             price: item.price
+          }));
+
+          const { error: itemsError } = await supabase.from('sale_items').insert(itemsToInsert);
+          if (itemsError) throw itemsError;
+
+          for (const item of sale.items) {
+             const { data: p } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+             if (p) {
+                await supabase.from('products').update({ stock: p.stock - item.quantity }).eq('id', item.product_id);
+             }
+          }
+        } catch (e) {
+           console.error("Failed to sync offline sale", e);
+           failedQueue.push(sale);
+        }
+     }
+     
+     localStorage.setItem('offline_sales_queue', JSON.stringify(failedQueue));
+     if (failedQueue.length === 0) {
+        setSuccessMessage("Toutes les ventes hors-ligne ont été synchronisées !");
+        setTimeout(() => setSuccessMessage(''), 3000);
+        fetchProducts();
+     }
+  }
 
   const fetchProducts = async () => {
     if (!user) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('name');
-    
-    if (error) {
-      console.error('Erreur de chargement des produits', error);
-    } else {
-      setProducts(data || []);
+    try {
+      if (!isOnline) {
+         throw new Error("Offline");
+      }
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('name');
+      
+      if (error) {
+        throw error;
+      } else {
+        setProducts(data || []);
+        localStorage.setItem('pos_products_cache', JSON.stringify(data || []));
+      }
+    } catch (e) {
+      console.log("Loading products from cache");
+      const cached = localStorage.getItem('pos_products_cache');
+      if (cached) {
+         setProducts(JSON.parse(cached));
+      }
     }
     setLoading(false);
   };
 
-  const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    (p.barcode && p.barcode.includes(searchQuery))
-  );
+  const categories = ['Toutes', ...Array.from(new Set(products.map(p => p.category || 'Général')))];
+
+  const filteredProducts = products.filter((p) => {
+    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || (p.barcode && p.barcode.includes(searchQuery));
+    const matchesCategory = selectedCategory === 'Toutes' || (p.category || 'Général') === selectedCategory;
+    return matchesSearch && matchesCategory;
+  });
+
+  const getDiscountedTotal = () => {
+    let total = cartTotal();
+    if (discountPercent > 0) {
+      total = total - (total * (discountPercent / 100));
+    }
+    return total;
+  };
 
   const handleScanSuccess = (decodedText: string) => {
     setIsScannerOpen(false);
@@ -135,10 +229,55 @@ export default function Pos() {
     setProcessing(true);
 
     try {
+      if (!isOnline) {
+         // Save offline
+         const offlineSale = {
+            id: crypto.randomUUID(),
+            total: getDiscountedTotal(),
+            payment_method: paymentMethod,
+            user_id: user.id,
+            created_at: new Date().toISOString(),
+            items: cart.map(item => ({
+               product_id: item.id,
+               quantity: item.quantity,
+               price: item.price
+            }))
+         };
+         
+         const existingQueue = JSON.parse(localStorage.getItem('offline_sales_queue') || '[]');
+         existingQueue.push(offlineSale);
+         localStorage.setItem('offline_sales_queue', JSON.stringify(existingQueue));
+
+         // Update local stock cache roughly
+         const cachedProducts = JSON.parse(localStorage.getItem('pos_products_cache') || '[]');
+         cart.forEach(item => {
+            const p = cachedProducts.find((cp:any) => cp.id === item.id);
+            if (p) p.stock -= item.quantity;
+         });
+         localStorage.setItem('pos_products_cache', JSON.stringify(cachedProducts));
+         setProducts(cachedProducts);
+
+         setReceiptData({
+            saleId: offlineSale.id,
+            date: new Date(offlineSale.created_at),
+            items: [...cart],
+            total: offlineSale.total,
+            paymentMethod: paymentMethod
+         });
+
+         setPaymentModalOpen(false);
+         clearCart();
+         setDiscountPercent(0);
+         setSuccessMessage("Vente enregistrée HORS-LIGNE. Elle sera synchronisée lors du retour de la connexion.");
+         setTimeout(() => setSuccessMessage(''), 5000);
+         setProcessing(false);
+         return;
+      }
+
       const { data: saleData, error: saleError } = await supabase
         .from('sales')
         .insert({
-          total: cartTotal(),
+          total: getDiscountedTotal(),
           payment_method: paymentMethod,
           user_id: user.id
         })
@@ -152,7 +291,7 @@ export default function Pos() {
         sale_id: saleData.id,
         product_id: item.id,
         quantity: item.quantity,
-        price: item.price
+        price: item.price // we save the list price. Can handle a discount col per item later if needed.
       }));
 
       const { error: itemsError } = await supabase
@@ -170,14 +309,18 @@ export default function Pos() {
         if (stockError) console.error("Erreur de mise à jour du stock", stockError);
       }
 
-      setSuccessMessage(`Vente enregistrée avec succès. Total: R ${cartTotal().toFixed(2)}`);
+      setReceiptData({
+        saleId: saleData.id,
+        date: new Date(saleData.created_at || Date.now()),
+        items: [...cart],
+        total: getDiscountedTotal(), // <-- Corrected
+        paymentMethod: paymentMethod
+      });
+
       setPaymentModalOpen(false);
       clearCart();
+      setDiscountPercent(0); // Reset discount
       fetchProducts();
-      
-      setTimeout(() => {
-        setSuccessMessage('');
-      }, 5000);
 
     } catch (error) {
       console.error("Erreur lors du paiement:", error);
@@ -188,7 +331,11 @@ export default function Pos() {
   };
 
   const shareOnWhatsApp = () => {
-    const text = `Merci pour votre achat.\nTotal: R ${cartTotal().toFixed(2)}\n\nÀ bientôt !`;
+    let text = `Merci pour votre achat.\n`;
+    if (discountPercent > 0) {
+      text += `Remise appliquée: ${discountPercent}%\n`;
+    }
+    text += `Total: R ${getDiscountedTotal().toFixed(2)}\n\nÀ bientôt !`;
     const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
@@ -204,7 +351,15 @@ export default function Pos() {
         )}
         
         <header className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold hidden lg:block text-brand-text">Vente</h1>
+          <div className="flex items-center space-x-4">
+             <h1 className="text-2xl font-bold hidden lg:block text-brand-text">Vente</h1>
+             {!isOnline && (
+                <span className="bg-orange-500/20 text-orange-500 px-3 py-1 rounded-full text-xs font-bold border border-orange-500/50 flex items-center">
+                   <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse mr-2"></div>
+                   Mode Hors-ligne
+                </span>
+             )}
+          </div>
           <div className="relative flex-1 lg:w-96 lg:flex-none">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-brand-text-muted" />
@@ -229,6 +384,23 @@ export default function Pos() {
             <span>Session: Actif</span>
           </div>
         </header>
+
+        {/* Categories row */}
+        <div className="flex space-x-2 overflow-x-auto pb-4 mb-4 scrollbar-hide">
+          {categories.map((cat, idx) => (
+             <button
+                key={idx}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap px-4 py-2 rounded-full font-medium transition-colors border ${
+                   selectedCategory === cat 
+                   ? 'bg-brand-accent text-white border-brand-accent' 
+                   : 'bg-brand-surface text-brand-text border-brand-border hover:bg-brand-surface-light'
+                }`}
+             >
+                {cat}
+             </button>
+          ))}
+        </div>
 
         <div className="flex-1 overflow-y-auto pr-2">
           {loading ? (
@@ -359,13 +531,31 @@ export default function Pos() {
         </div>
 
         <div className="p-6 bg-brand-bg border-t border-brand-border">
+          {/* Discount input */}
+          {cart.length > 0 && (
+            <div className="flex items-center justify-between mb-4 border-b border-brand-border pb-4">
+              <span className="text-brand-text-muted text-sm flex items-center gap-2">Remise (%)</span>
+              <div className="flex items-center space-x-2">
+                 <button onClick={() => setDiscountPercent(Math.max(0, discountPercent - 5))} className="p-2 bg-brand-surface border border-brand-border rounded-lg">-</button>
+                 <span className="font-bold w-8 text-center">{discountPercent}%</span>
+                 <button onClick={() => setDiscountPercent(Math.min(100, discountPercent + 5))} className="p-2 bg-brand-surface border border-brand-border rounded-lg">+</button>
+              </div>
+            </div>
+          )}
+          
           <div className="flex justify-between mb-4">
             <span className="text-brand-text-muted">Sous-total</span>
             <span className="text-brand-text font-medium">R {cartTotal().toFixed(2)}</span>
           </div>
+          {discountPercent > 0 && (
+            <div className="flex justify-between mb-4">
+              <span className="text-red-400">Remise ({discountPercent}%)</span>
+              <span className="text-red-400 font-medium">- R {(cartTotal() * (discountPercent / 100)).toFixed(2)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center mb-6">
             <span className="text-brand-text-muted">Total</span>
-            <span className="text-2xl font-extrabold text-brand-accent">R {cartTotal().toFixed(2)}</span>
+            <span className="text-2xl font-extrabold text-brand-accent">R {getDiscountedTotal().toFixed(2)}</span>
           </div>
           
           <button
@@ -414,7 +604,7 @@ export default function Pos() {
                 disabled={processing}
                 className="w-full bg-brand-accent text-white font-bold py-4 rounded-xl disabled:opacity-50 hover:bg-brand-accent-hover text-lg shadow-md"
               >
-                {processing ? 'Traitement...' : `Confirmer R ${cartTotal().toFixed(2)}`}
+                {processing ? 'Traitement...' : `Confirmer R ${getDiscountedTotal().toFixed(2)}`}
               </button>
               <button
                 onClick={() => setPaymentModalOpen(false)}
@@ -434,6 +624,78 @@ export default function Pos() {
             onClose={() => setIsScannerOpen(false)}
             onScan={handleScanSuccess}
          />
+      )}
+
+      {/* Receipt Modal */}
+      {receiptData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 print:bg-white print:p-0">
+          <div className="bg-brand-surface rounded-2xl w-full max-w-md mx-auto overflow-hidden shadow-2xl relative border border-brand-border flex flex-col print:border-none print:shadow-none print:w-full print:max-w-none">
+            <div className="p-6 text-center border-b border-brand-border bg-brand-surface-light print:bg-white print:border-black">
+              <div className="w-16 h-16 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto mb-4 print:hidden">
+                 <Check size={32} />
+              </div>
+              <h2 className="text-2xl font-bold text-brand-text print:text-black">Paiement Réussi</h2>
+              <p className="text-brand-text-muted mt-1 print:text-black">Reçu n° {receiptData.saleId.slice(0, 8).toUpperCase()}</p>
+              <p className="text-xs text-brand-text-muted mt-1 print:text-black">{receiptData.date.toLocaleString('fr-FR')}</p>
+            </div>
+            
+            <div className="p-6 flex-1 overflow-y-auto max-h-[50vh] print:max-h-none print:overflow-visible text-brand-text print:text-black">
+              <div className="space-y-3 mb-6">
+                {receiptData.items.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span>
+                      {item.quantity}x {item.name}
+                    </span>
+                    <span className="text-brand-text-muted print:text-black">
+                      R {(item.price * item.quantity).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="border-t border-brand-border border-dashed pt-4 mb-4 print:border-black">
+                <div className="flex justify-between items-center text-lg font-bold">
+                  <span>Total Payé</span>
+                  <span className="text-brand-accent print:text-black">R {receiptData.total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm mt-2">
+                  <span className="text-brand-text-muted print:text-black">Méthode</span>
+                  <span>{receiptData.paymentMethod}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-brand-bg border-t border-brand-border flex flex-col space-y-3 print:hidden">
+               <button 
+                 onClick={() => {
+                   const text = `*Ticket de Caisse*\nReçu: ${receiptData.saleId.slice(0, 8).toUpperCase()}\nDate: ${receiptData.date.toLocaleString('fr-FR')}\n\n` +
+                                receiptData.items.map(i => `${i.quantity}x ${i.name} - R ${(i.price * i.quantity).toFixed(2)}`).join('\n') +
+                                `\n\n*Total: R ${receiptData.total.toFixed(2)}*\nMéthode: ${receiptData.paymentMethod}\n\nMerci pour votre visite !`;
+                   const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                   window.open(url, '_blank');
+                 }}
+                 className="w-full bg-[#25D366] text-white px-6 py-3 rounded-xl font-bold hover:bg-[#20b858] transition-colors flex items-center justify-center"
+               >
+                 Envoyer par WhatsApp
+               </button>
+               <button 
+                 onClick={() => window.print()}
+                 className="w-full bg-brand-surface-light text-brand-text px-6 py-3 rounded-xl font-medium border border-brand-border hover:bg-brand-border transition-colors flex items-center justify-center"
+               >
+                 <FileText size={20} className="mr-2"/> Imprimer le reçu
+               </button>
+               <button 
+                 onClick={() => {
+                    setReceiptData(null);
+                    setIsCartOpen(false); // Close cart drawer on mobile when starting new sale
+                 }}
+                 className="w-full bg-brand-accent text-white px-6 py-3 rounded-xl font-bold hover:bg-brand-accent-hover transition-colors flex items-center justify-center"
+               >
+                 Nouvelle Vente
+               </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

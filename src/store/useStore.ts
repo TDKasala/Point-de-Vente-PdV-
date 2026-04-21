@@ -8,11 +8,13 @@ export interface Product {
   stock: number;
   barcode?: string;
   image_url?: string;
+  category?: string;
   user_id: string;
 }
 
 export interface CartItem extends Product {
   quantity: number;
+  discount?: number; // % discount on this item
 }
 
 interface PosState {
